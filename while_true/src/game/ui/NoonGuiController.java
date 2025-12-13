@@ -1,7 +1,19 @@
 package game.ui;
 
 import game.stage.noon.NoonGameLogic;
+import game.ui.gameover.GameOverOverlay; // 🔥 게임오버 오버레이 import
 
+/**
+ * NoonGuiController
+ *
+ * [역할]
+ * - 점심 스테이지 UI와 GameLogic을 연결하는 컨트롤러
+ * - 버튼 입력 → 로직 처리 → 화면 갱신 담당
+ *
+ * [현재 상태]
+ * - 3번 버튼은 임시로 GameOver 연출 테스트용으로 사용 중
+ * - 아침 스테이지 완성 후 원래 로직(onUserChoice)으로 복구 예정
+ */
 public class NoonGuiController {
 
     private final NoonWindow window;
@@ -32,23 +44,32 @@ public class NoonGuiController {
         window.getBtn3().addActionListener(e -> onUserChoice(3));
     }
 
+    /**
+     * 사용자의 선택 처리
+     */
     private void onUserChoice(int choice) {
-        // 로직 처리 → 전체 텍스트 반환 (변화 로그 + 다음 대사 포함)
+        // 1️⃣ 로직 처리 → 전체 텍스트 반환
         String fullText = logic.handleChoice(choice);
 
-        // 1) 가운데 대사 전체 갱신
+        // 2️⃣ 가운데 대사 전체 갱신
         window.printDialogue(fullText);
 
-        // 2) 변화 로그 + 현재 상태 부분만 왼쪽에 표시
+        // 3️⃣ 변화 로그 + 현재 상태 부분만 왼쪽에 표시
         updateStatusArea(fullText);
 
-        // 3) fullText 안에서 "---------- [대화 N회차] ----------" → N 추출 → NPC 이미지 변경
-        int npcIndex = extractCurrentNpcIndex(fullText);
+        // ★ 4️⃣ Game Over 판정 (여기가 핵심 위치)
+        if (logic.isGameOver()) {
+            new GameOverOverlay(window).setVisible(true);
+            return; // ⚠️ 아래 코드 실행 막음
+        }
 
+        // 5️⃣ 대화 회차 → NPC 이미지 변경
+        int npcIndex = extractCurrentNpcIndex(fullText);
         if (npcIndex >= 1 && npcIndex <= 12) {
             window.setNpcImage(npcIndex);
         }
     }
+
 
     /**
      * fullText 안에서 마지막 "---------- [대화 N회차] ----------" 의 N을 찾아 리턴
@@ -79,7 +100,6 @@ public class NoonGuiController {
         String statusPart = "";
 
         int idx = fullText.indexOf("[변화 로그]");
-
         if (idx >= 0) {
             statusPart = fullText.substring(idx);
             int nextIdx = statusPart.indexOf("---------- [대화");

@@ -4,8 +4,8 @@ import java.util.Random;
 
 /**
  * NoonGameLogic
- * - 점심 스테이지(미연시) 진행을 담당하는 순수 로직 클래스.
- * - 콘솔 입출력 없음 / GUI에서 호출만 됨
+ * - 점심 스테이지(미연시) 진행을 담당하는 순수 로직 클래스
+ * - UI / 콘솔과 완전히 분리된 게임 규칙 담당
  */
 public class NoonGameLogic {
 
@@ -21,10 +21,24 @@ public class NoonGameLogic {
     private final Random random = new Random();
     private boolean gameOver = false;
 
-    /** 게임 시작 시 처음 한 번 호출: 첫 NPC 대사 리턴 */
+    /* ===================== 외부 조회용 ===================== */
+
+    /** 컨트롤러에서 GameOver 여부 확인용 */
+    public boolean isGameOver() {
+        return gameOver;
+    }
+
+    /* ===================== 시작 ===================== */
+
+    /** 게임 시작 시 처음 한 번 호출 */
     public String start() {
         interactionCount = 0;
         gameOver = false;
+
+        hp = 5;
+        mental = 5;
+        knowledge = 5;
+        social = 0;
 
         return "=== 점심 스테이지: 캠퍼스 미연시 시작 ===\n"
              + "주인공: 컴공과 2학년. 반복되는 하루 속에서 이미 루프를 자각하고 있다.\n"
@@ -32,37 +46,66 @@ public class NoonGameLogic {
              + buildNpcDialogue(1);
     }
 
-    /** 버튼 클릭 시 호출: 선택(1/2/3)을 반영하고 다음 대사를 리턴 */
+    /* ===================== 선택 처리 ===================== */
+
+    /** 버튼 클릭 시 호출 */
     public String handleChoice(int choice) {
         if (gameOver) {
             return "[시스템] 이미 이 루프는 끝났습니다.";
         }
 
-        // 이미 종료된 상태에서 또 선택 시
         if (interactionCount >= MAX_INTERACTIONS) {
             return "=== 점심 스테이지는 이미 종료되었다 ===\n"
                  + "NPC들의 반복되는 말들이 머리를 스친다.\n"
-                 + "이 점심 루프에서는 더 바꿀 수 있는 게 없는 것 같다.\n"
                  + "다음 루프에서는… 다른 시간대에서 실마리를 찾아야 한다.";
         }
 
         int npcIndex = interactionCount + 1;
 
-        // 선택 반영
         StringBuilder sb = new StringBuilder();
         sb.append("---------- [대화 ").append(npcIndex).append("회차 결과] ----------\n");
 
-        // NPC + 선택에 따라 상태 변화 적용
+        // 1️⃣ 선택에 따른 상태 변화
         applyNpcEffect(npcIndex, choice, sb);
 
-        // 상태 출력
+        // 2️⃣ 상태값 범위 제한
+        clampStats();
+
+        // 3️⃣ 상태 출력
         sb.append("\n현재 상태 → 체력: ").append(hp)
           .append(" / 멘탈: ").append(mental)
           .append(" / 지식: ").append(knowledge)
           .append(" / 사교: ").append(social)
           .append("\n");
 
-        // Game Over 체크
+        // 4️⃣ Game Over 판정
+        if (checkGameOver(sb)) {
+            return sb.toString();
+        }
+
+        interactionCount++;
+
+        // 5️⃣ 다음 NPC 대사
+        if (interactionCount < MAX_INTERACTIONS) {
+            int nextNpc = interactionCount + 1;
+
+            sb.append("\n---------- [대화 ")
+              .append(nextNpc).append("회차] ----------\n");
+
+            sb.append(buildNpcDialogue(nextNpc));
+        } else {
+            sb.append("\n=== 점심 스테이지 종료 ===\n")
+              .append("오늘 점심도… 결국 같은 흐름으로 흘러갔다.\n")
+              .append("이건 단순한 기분 탓이 아니라… 분명히 루프다.");
+        }
+
+        return sb.toString();
+    }
+
+    /* ===================== Game Over ===================== */
+
+    /** Game Over 판정 + 엔딩 문구 */
+    private boolean checkGameOver(StringBuilder sb) {
         if (hp <= 0 || mental <= 0 || knowledge <= 0) {
             gameOver = true;
 
@@ -73,53 +116,13 @@ public class NoonGameLogic {
             } else {
                 sb.append("\nGame Over - 지식 0 (학사경고 엔딩)\n");
             }
-            return sb.toString();
+            return true;
         }
-
-        interactionCount++;
-
-        // 다음 NPC가 남아 있으면 그 대사도 이어서 붙여줌
-        if (interactionCount < MAX_INTERACTIONS) {
-            int nextNpc = interactionCount + 1;
-
-            sb.append("\n---------- [대화 ")
-              .append(nextNpc).append("회차] ----------\n");
-
-            sb.append(buildNpcDialogue(nextNpc));
-
-        } else {
-            // ===== 점심 루프 정상 종료 엔딩 =====
-            sb.append("\n=== 점심 스테이지 종료 ===\n")
-              .append("오늘 점심도… 결국 같은 흐름으로 흘러갔다.\n")
-              .append("NPC들의 말 속에서 스쳐 지나간 ‘익숙함’과 ‘데자뷰’. \n")
-              .append("주인공은 확신한다. 이건 단순한 기분 탓이 아니라…\n")
-              .append("분명히 루프다.\n")
-              .append("다음 루프에서는 다른 선택지를 찾아봐야 한다.");
-        }
-
-        return sb.toString();
+        return false;
     }
 
-    /** 현재 NPC의 이름(로그용) */
-    private String getNpcName(int npc) {
-        return switch (npc) {
-            case 1 -> "교수님";
-            case 2 -> "버스기사";
-            case 3 -> "학교 친구";
-            case 4 -> "선배";
-            case 5 -> "후배";
-            case 6 -> "동아리 사람";
-            case 7 -> "헬창";
-            case 8 -> "식당 주인";
-            case 9 -> "대학원생";
-            case 10 -> "스님";
-            case 11 -> "과대표";
-            case 12 -> "조교";
-            default -> "???";
-        };
-    }
+    /* ===================== NPC 대사 ===================== */
 
-    /** NPC 대사 + 루프 암시 + 선택지 문자열까지 만들어서 리턴 */
     private String buildNpcDialogue(int npc) {
         StringBuilder sb = new StringBuilder();
 
@@ -173,95 +176,109 @@ public class NoonGameLogic {
                 sb.append("조교: \"보고서 형식 다시 보세요.\"\n");
                 maybeAppendHint(sb, "이 피드백… 계속 반복되는 느낌이다.");
             }
-            default -> sb.append("??? : \"...\"\n");
         }
 
         sb.append("\n1) 대화에 응한다   2) 적당히 넘긴다   3) 무시한다\n");
         return sb.toString();
     }
 
-    /** 30% 확률로 괄호 안에 루프 암시 멘트 추가 */
+    /* ===================== 루프 힌트 ===================== */
+
+    /** 회차가 쌓일수록 힌트 확률 증가 */
     private void maybeAppendHint(StringBuilder sb, String hint) {
-        if (random.nextDouble() < 0.3) {
+        double base = 0.2;
+        double bonus = interactionCount * 0.05;
+        if (random.nextDouble() < Math.min(0.6, base + bonus)) {
             sb.append("   (").append(hint).append(")\n");
         }
     }
 
-    /** NPC + 선택(1/2/3)에 따른 상태 변화 적용, 변화 로그를 sb에 기록 */
+    /* ===================== 상태 변화 ===================== */
+
     private void applyNpcEffect(int npc, int choice, StringBuilder sb) {
-        int dhp = 0;
-        int dMental = 0;
-        int dKnow = 0;
-        int dSocial = 0;
+        int dhp = 0, dMental = 0, dKnow = 0, dSocial = 0;
 
         switch (npc) {
-            case 1 -> { // 교수님
+            case 1 -> {
                 if (choice == 1)       { dKnow += 2; dMental -= 1; }
                 else if (choice == 2) { dMental -= 1; dSocial -= 1; }
                 else                  { dKnow -= 1; dMental -= 2; dSocial -= 2; }
             }
-            case 2 -> { // 버스기사
+            case 2 -> {
                 if (choice == 1)       { dSocial += 1; }
                 else if (choice == 3) { dSocial -= 1; dMental -= 1; }
             }
-            case 3 -> { // 학교 친구
+            case 3 -> {
                 if (choice == 1)       { dSocial += 1; dMental -= 1; }
                 else if (choice == 2) { dMental += 1; dSocial -= 1; }
                 else                  { dMental -= 1; dSocial -= 2; }
             }
-            case 4 -> { // 선배
+            case 4 -> {
                 if (choice == 1)       { dKnow += 1; dMental -= 1; }
                 else if (choice == 2) { dMental += 1; dSocial -= 1; }
                 else                  { dMental -= 2; dSocial -= 2; }
             }
-            case 5 -> { // 후배
+            case 5 -> {
                 if (choice == 1)       { dSocial += 1; dMental -= 1; }
                 else if (choice == 3) { dSocial -= 2; dMental -= 1; }
             }
-            case 6 -> { // 동아리 사람
+            case 6 -> {
                 if (choice == 1)       { dSocial += 1; dhp -= 1; }
                 else                   { dMental += 1; dSocial -= 1; }
             }
-            case 7 -> { // 헬창
+            case 7 -> {
                 if (choice == 1)       { dhp += 1; }
                 else if (choice == 2) { dSocial -= 1; }
                 else                  { dMental += 1; dSocial -= 1; }
             }
-            case 8 -> { // 식당 주인
+            case 8 -> {
                 if (choice == 1)       { dhp += 2; dSocial += 1; }
                 else if (choice == 3) { dhp -= 1; dSocial -= 1; dMental -= 1; }
             }
-            case 9 -> { // 대학원생
+            case 9 -> {
                 if (choice == 1)       { dKnow += 2; dMental -= 2; }
                 else if (choice == 2) { dMental += 1; }
                 else                  { dKnow -= 1; dMental -= 1; dSocial -= 2; }
             }
-            case 10 -> { // 스님
+            case 10 -> {
                 if (choice == 1)       { dMental += 2; dKnow += 1; }
                 else                  { dMental += 1; }
             }
-            case 11 -> { // 과대표
+            case 11 -> {
                 if (choice == 1)       { dKnow += 1; dSocial += 1; dMental -= 1; }
                 else if (choice == 2) { dMental += 1; dSocial -= 1; }
                 else                  { dMental += 1; dSocial -= 2; }
             }
-            case 12 -> { // 조교
+            case 12 -> {
                 if (choice == 1)       { dKnow += 1; dMental -= 1; }
                 else if (choice == 2) { dSocial -= 1; }
                 else                  { dKnow -= 1; dMental -= 1; dSocial -= 2; }
             }
         }
 
-        hp        += dhp;
-        mental    += dMental;
+        hp += dhp;
+        mental += dMental;
         knowledge += dKnow;
-        social    += dSocial;
+        social += dSocial;
 
         sb.append("[변화 로그] 체력 ").append(sign(dhp))
           .append(" / 멘탈 ").append(sign(dMental))
           .append(" / 지식 ").append(sign(dKnow))
           .append(" / 사교 ").append(sign(dSocial))
           .append("\n");
+    }
+
+    /* ===================== 유틸 ===================== */
+
+    private void clampStats() {
+        hp = clamp(hp, 0, 10);
+        mental = clamp(mental, 0, 10);
+        knowledge = clamp(knowledge, 0, 10);
+        social = clamp(social, -10, 10);
+    }
+
+    private int clamp(int v, int min, int max) {
+        return Math.max(min, Math.min(max, v));
     }
 
     private String sign(int v) {
