@@ -2,6 +2,7 @@ package game.ui;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*; // ✅ KeyEvent/ActionEvent 포함
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
@@ -24,11 +25,14 @@ public class NoonWindow extends JFrame {
     private JButton btnChoice3;
 
     // NPC 이미지 아이콘 배열 (12명)
-    private ImageIcon[] npcIcons = new ImageIcon[12];
+    private final ImageIcon[] npcIcons = new ImageIcon[12];
 
     // 배경 이미지
     private Image backgroundImage;
-    
+
+    // =========================
+    // 리소스 로딩 유틸
+    // =========================
     private Image loadImageOrNull(String path) {
         try {
             var url = getClass().getResource(path);
@@ -59,7 +63,9 @@ public class NoonWindow extends JFrame {
         }
     }
 
-
+    // =========================
+    // 생성자
+    // =========================
     public NoonWindow() {
         setTitle("점심 스테이지 - while true");
         setSize(1200, 900);
@@ -67,9 +73,8 @@ public class NoonWindow extends JFrame {
         setLocationRelativeTo(null);
         setResizable(false);
 
-        // ===== 배경 이미지 로딩 =====
+        // ===== 배경 이미지 로딩 (classpath 절대경로) =====
         backgroundImage = loadImageOrNull("/assets/images/noon/00_캠퍼스 배경.png");
-
 
         // 전체 레이아웃
         setLayout(new BorderLayout());
@@ -79,9 +84,15 @@ public class NoonWindow extends JFrame {
             @Override
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
+
                 if (backgroundImage != null) {
-                    g.drawImage(backgroundImage, 0, 0,
-                            getWidth(), getHeight(), this);
+                    g.drawImage(backgroundImage, 0, 0, getWidth(), getHeight(), this);
+                } else {
+                    // 디버그용(배경 못 찾으면 빨간 화면 + 메시지)
+                    g.setColor(Color.RED);
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                    g.setColor(Color.WHITE);
+                    g.drawString("BG IMAGE NULL (resource not found)", 20, 20);
                 }
             }
         };
@@ -113,6 +124,7 @@ public class NoonWindow extends JFrame {
         JPanel infoPanel = new JPanel(new BorderLayout());
         bottomRoot.add(infoPanel, BorderLayout.CENTER);
 
+        // 상태 로그
         statusArea = new JTextArea();
         statusArea.setEditable(false);
         statusArea.setLineWrap(true);
@@ -124,6 +136,7 @@ public class NoonWindow extends JFrame {
         statusScroll.setPreferredSize(new Dimension(250, 200));
         infoPanel.add(statusScroll, BorderLayout.WEST);
 
+        // 대화 로그
         dialogueArea = new JTextArea();
         dialogueArea.setEditable(false);
         dialogueArea.setLineWrap(true);
@@ -133,6 +146,7 @@ public class NoonWindow extends JFrame {
         JScrollPane dialogueScroll = new JScrollPane(dialogueArea);
         infoPanel.add(dialogueScroll, BorderLayout.CENTER);
 
+        // 버튼 영역
         JPanel buttonPanel = new JPanel();
         buttonPanel.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
 
@@ -155,10 +169,13 @@ public class NoonWindow extends JFrame {
         loadNpcIcons();
         setNpcImage(1);
 
-        // ===== ⭐ 핵심: 창 전면 포커스 처리 (macOS 대응) =====
+        // ✅ ESC 확인창 바인딩 (여기서 한번만 설정)
+        bindEscConfirm();
+
+        // ===== 창 표시 =====
         setVisible(true);
 
-        // 창이 열린 직후 강제로 전면으로 올림
+        // ===== macOS 전면 포커스 + 도움말 오버레이 =====
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowOpened(WindowEvent e) {
@@ -166,12 +183,17 @@ public class NoonWindow extends JFrame {
                 toFront();
                 requestFocus();
                 setAlwaysOnTop(false);
+
+                SwingUtilities.invokeLater(() -> {
+                    GameHelpOverlay_Noon.showOnce(NoonWindow.this);
+                });
             }
         });
     }
 
-    // ===== 외부에서 쓰는 메서드들 =====
-
+    // =========================
+    // 외부에서 쓰는 메서드들
+    // =========================
     public JButton getBtn1() { return btnChoice1; }
     public JButton getBtn2() { return btnChoice2; }
     public JButton getBtn3() { return btnChoice3; }
@@ -191,6 +213,9 @@ public class NoonWindow extends JFrame {
         playerLabel.setText(text);
     }
 
+    // =========================
+    // NPC 아이콘 로딩
+    // =========================
     private void loadNpcIcons() {
         String basePath = "/assets/images/noon/";
 
@@ -237,10 +262,40 @@ public class NoonWindow extends JFrame {
         }
     }
 
-
     public void setNpcImage(int npcIndex) {
         if (npcIndex < 1 || npcIndex > npcIcons.length) return;
-        playerLabel.setIcon(npcIcons[npcIndex - 1]);
+
+        ImageIcon icon = npcIcons[npcIndex - 1];
+        playerLabel.setIcon(icon);
         playerLabel.setText(null);
+    }
+
+    // =========================
+    // ESC 확인창 바인딩
+    // =========================
+    private void bindEscConfirm() {
+        JRootPane root = getRootPane();
+
+        InputMap im = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = root.getActionMap();
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "ESC_CONFIRM");
+        am.put("ESC_CONFIRM", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int result = JOptionPane.showConfirmDialog(
+                        NoonWindow.this,
+                        "정말 넘길까?",
+                        "…",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.QUESTION_MESSAGE
+                );
+
+                if (result == JOptionPane.YES_OPTION) {
+                    // 데모: 여기서는 아무 것도 안 함
+                    // (원하면 나중에: dispose(); 혹은 컨트롤러 콜백 연결)
+                }
+            }
+        });
     }
 }
