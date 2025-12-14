@@ -15,9 +15,9 @@ import java.util.Scanner;
 public class NoonScene implements Scene {
 
     // ===== 상태값(플레이어 스탯) =====
-    private int hp = 3;          // 체력
-    private int mental = 4;      // 멘탈
-    private int knowledge = 3;   // 지식
+    private int hp = 5;          // 체력
+    private int mental = 5;      // 멘탈
+    private int knowledge = 5;   // 지식
     private int social = 0;      // 사교
 
     // 상호작용 횟수

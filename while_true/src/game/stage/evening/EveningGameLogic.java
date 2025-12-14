@@ -3,10 +3,15 @@ package game.stage.evening;
 import java.util.Random;
 
 /**
- * 저녁 스테이지 로직 (아이템 전 버전)
- * - 재장전은 자동이 아니라 needsReload()로 알림 -> 컨트롤러가 2초 연출 후 reload() 호출
- * - 자기에게 공포탄이면 턴 유지 (플레이어/악마 동일 적용)
- * - 악마는 planDemonTurn()으로 "겨눌 대상"과 "다음 탄(실/공포)"을 미리 결정 -> executePlannedDemonTurn()에서 실제 발사/소모
+ * EveningGameLogic (아이템 버전)
+ * - 자동 재장전 없음: needsReload() -> 컨트롤러가 2초 연출 후 reload() 호출
+ * - 자기 자신에게 공포탄이면 턴 유지 (플레이어/악마 동일)
+ * - 악마 턴: planDemonTurn()로 겨눌 대상/탄 미리 결정 -> executePlannedDemonTurn()
+ * - 아이템(플레이어만):
+ *   1) 과제미루기: 악마 다음 턴 스킵
+ *   2) 잠깐의휴식: HP +1(최대 5)
+ *   3) GPT의도움: 다음 탄(실/공포) 확인(소모X, 다음 발사에 적용)
+ *   4) 재장전: 즉시 장전(reload), 턴 유지(연출은 컨트롤러에서)
  */
 public class EveningGameLogic {
 
@@ -25,16 +30,27 @@ public class EveningGameLogic {
     private int playerHp;   // 1~5
     private int demonHp = 5;
 
-    // 탄창 (실탄 / 공포탄 개수)
+    // 탄창(남은 개수)
     private int liveCount;
     private int blankCount;
 
-    // 악마 턴 "미리 계획"
+    // "다음 탄" 미리보기 캐시 (GPT / 악마 plan에서 사용)
+    private Boolean cachedNextBulletLive = null;
+
+    // 악마 plan
     private DemonTarget plannedTarget = null;
-    private Boolean plannedBulletLive = null; // true=실탄, false=공포탄
+    private Boolean plannedBulletLive = null;
+
+    // 아이템 카운트
+    private int itemProcrastinate; // 과제미루기
+    private int itemRest;          // 잠깐의휴식
+    private int itemGpt;           // GPT의도움
+    private int itemRestart;       // 재장전
+
+    // 악마 턴 스킵 플래그
+    private boolean demonSkipNext = false;
 
     public EveningGameLogic() {
-        // TODO: 나중에 아침/점심에서 넘어온 값으로 교체
         this(8, 5, 7, 6);
     }
 
@@ -46,10 +62,11 @@ public class EveningGameLogic {
 
         this.playerHp = convertHealthToHp(this.health);
 
-        reload(); // 첫 장전
+        reload();        // 첫 장전
+        grantItems();    // 멘탈 기반 랜덤 지급
     }
 
-    // ---------- getters ----------
+    // ---------------- getters ----------------
     public int getPlayerHp() { return playerHp; }
     public int getDemonHp() { return demonHp; }
     public int getLiveCount() { return liveCount; }
@@ -60,16 +77,21 @@ public class EveningGameLogic {
     public int getIntelligence() { return intelligence; }
     public int getSocial() { return social; }
 
+    public int getItemProcrastinate() { return itemProcrastinate; }
+    public int getItemRest() { return itemRest; }
+    public int getItemGpt() { return itemGpt; }
+    public int getItemRestart() { return itemRestart; }
+
     public boolean isGameOver() {
         return playerHp <= 0 || demonHp <= 0;
     }
 
-    /** live/blank 중 하나라도 0이면 재장전 필요 */
+    /** 둘 다 0발일 때만 재장전 필요 */
     public boolean needsReload() {
-        return liveCount <= 0 || blankCount <= 0;
+        return (liveCount + blankCount) <= 0;
     }
 
-    /** 컨트롤러가 연출 후 호출하는 장전: 6발 중 실탄 1~5 랜덤 */
+    /** 컨트롤러가 2초 연출 후 호출하는 실제 장전 */
     public void reload() {
         int total = 6;
         int live = 1 + random.nextInt(5); // 1..5
@@ -78,12 +100,35 @@ public class EveningGameLogic {
         liveCount = live;
         blankCount = blank;
 
-        // 악마 계획은 장전하면 무효화
+        // 캐시/plan 초기화
+        cachedNextBulletLive = null;
         plannedTarget = null;
         plannedBulletLive = null;
     }
 
-    // ---------- 플레이어 ----------
+    // ---------------- 아이템 지급 ----------------
+    private void grantItems() {
+        int give = mentalToItemCount(mental);
+        for (int i = 0; i < give; i++) {
+            int pick = random.nextInt(4);
+            switch (pick) {
+                case 0 -> itemProcrastinate++;
+                case 1 -> itemRest++;
+                case 2 -> itemGpt++;
+                case 3 -> itemRestart++;
+            }
+        }
+    }
+
+    private int mentalToItemCount(int m) {
+        if (m <= 2) return 0;
+        if (m <= 4) return 1;
+        if (m <= 6) return 2;
+        if (m <= 8) return 3;
+        return 4;
+    }
+
+    // ---------------- 플레이어: 발사 ----------------
     public TurnResult shootEnemy(StringBuilder log) {
         if (isGameOver()) return TurnResult.TURN_END;
 
@@ -97,7 +142,7 @@ public class EveningGameLogic {
         return TurnResult.TURN_END;
     }
 
-    /** 자기에게 공포탄이면 턴 유지 */
+    /** 공포탄 + 자기에게 발사 -> TURN_CONTINUE */
     public TurnResult shootSelf(StringBuilder log) {
         if (isGameOver()) return TurnResult.TURN_END;
 
@@ -112,12 +157,80 @@ public class EveningGameLogic {
         }
     }
 
-    // ---------- 악마 ----------
-    /** 악마가 누구를 겨눌지 + 다음 탄(실/공포)을 미리 결정 (겨누기 연출용) */
+    // ---------------- 플레이어: 아이템 ----------------
+    public boolean useProcrastinate(StringBuilder log) {
+        if (itemProcrastinate <= 0) {
+            log.append("과제미루기가 없다.\n");
+            return false;
+        }
+        itemProcrastinate--;
+        demonSkipNext = true;
+        log.append("🗂️ [과제미루기] 과제 악마의 다음 턴이 스킵된다!\n");
+        return true;
+    }
+
+    public boolean useRest(StringBuilder log) {
+        if (itemRest <= 0) {
+            log.append("잠깐의휴식이 없다.\n");
+            return false;
+        }
+        itemRest--;
+        int before = playerHp;
+        playerHp = Math.min(5, playerHp + 1);
+        log.append("🛌 [잠깐의휴식] HP 회복! (").append(before).append(" → ").append(playerHp).append(")\n");
+        return true;
+    }
+
+    /** 다음 탄(실/공포) 확인. 소모 X, 다음 발사에 적용(캐시) */
+    public boolean useGpt(StringBuilder log) {
+        if (itemGpt <= 0) {
+            log.append("GPT의도움이 없다.\n");
+            return false;
+        }
+        itemGpt--;
+        boolean next = peekNextBullet(); // 캐시 세팅
+        log.append("🤖 [GPT의도움] 다음 탄은 ").append(next ? "실탄" : "공포탄").append("이다.\n");
+        return true;
+    }
+
+    /** 즉시 재장전(턴 유지). 연출은 컨트롤러에서 2초 Timer로 처리 */
+    public boolean useRestart(StringBuilder log) {
+        if (itemRestart <= 0) {
+            log.append("재장전이 없다.\n");
+            return false;
+        }
+        itemRestart--;
+        reload();
+        log.append("🔄 [재장전] 즉시 재장전! (턴 유지)\n");
+        return true;
+    }
+
+    // ---------------- 악마: 턴 스킵 ----------------
+    public boolean consumeDemonSkip() {
+        if (demonSkipNext) {
+            demonSkipNext = false;
+            return true;
+        }
+        return false;
+    }
+
+    // ---------------- 악마: plan / execute ----------------
     public DemonTarget planDemonTurn() {
         if (isGameOver()) return null;
 
-        plannedBulletLive = peekBullet();
+        // ⭐ 한 종류만 남은 "확정 구간"이면 악마는 멍청하게 확률 굴리지 말고 최적 플레이
+        if (blankCount == 0 && liveCount > 0) {          // 실탄만 남음
+            plannedBulletLive = true;                    // 다음 탄은 실탄 확정
+            plannedTarget = DemonTarget.PLAYER;          // 플레이어에게 쏴야 이득
+            return plannedTarget;
+        }
+        if (liveCount == 0 && blankCount > 0) {          // 공포탄만 남음
+            plannedBulletLive = false;                   // 다음 탄은 공포탄 확정
+            plannedTarget = DemonTarget.SELF;            // 자기에게 쏴서 턴 유지 노림
+            return plannedTarget;
+        }
+
+        plannedBulletLive = peekNextBullet(); // 캐시 세팅 + 탄 종류 확정
 
         int chanceShootPlayer;
         if (plannedBulletLive) {
@@ -130,24 +243,22 @@ public class EveningGameLogic {
 
         boolean targetPlayer = random.nextInt(100) < chanceShootPlayer;
         plannedTarget = targetPlayer ? DemonTarget.PLAYER : DemonTarget.SELF;
-
         return plannedTarget;
     }
 
-    /** plan 결과로 실제 발사(탄 소모/피해 적용). 자기에게 공포탄이면 악마 턴 유지 */
     public TurnResult executePlannedDemonTurn(StringBuilder log) {
         if (isGameOver()) return TurnResult.TURN_END;
 
         if (plannedTarget == null || plannedBulletLive == null) {
-            // 안전장치: 계획이 없으면 즉석 계획 후 실행
             planDemonTurn();
         }
 
-        consumePlannedBullet();
+        // 계획한 "그 탄"을 실제로 소모(캐시를 쓰도록 drawBullet 호출)
+        boolean bullet = drawBullet(); // 이게 plannedBulletLive와 동일해야 함
 
         if (plannedTarget == DemonTarget.PLAYER) {
-            log.append("당신을 노리고 방아쇠를 당겼다! ");
-            if (plannedBulletLive) {
+            log.append("과제 악마가 당신을 노리고 방아쇠를 당겼다! ");
+            if (bullet) {
                 playerHp = Math.max(0, playerHp - 1);
                 log.append("💥 실탄! 내 HP가 1 줄었다.\n");
             } else {
@@ -157,9 +268,9 @@ public class EveningGameLogic {
             return TurnResult.TURN_END;
         }
 
-        // 자기 자신
-        log.append("자기 자신에게 방아쇠를 당겼다! ");
-        if (plannedBulletLive) {
+        // 자기 자신에게
+        log.append("과제 악마가 자기 자신에게 방아쇠를 당겼다! ");
+        if (bullet) {
             demonHp = Math.max(0, demonHp - 1);
             log.append("💥 실탄! 악마 HP가 1 줄었다.\n");
             clearPlan();
@@ -176,32 +287,34 @@ public class EveningGameLogic {
         plannedBulletLive = null;
     }
 
-    // ---------- 탄 관련 ----------
-    /** 소모 없이 다음 탄이 실탄인지 공포탄인지 '미리보기' */
-    private boolean peekBullet() {
+    // ---------------- 탄 처리 ----------------
+    /** 다음 탄 미리보기(소모X). 캐시에 저장해서 다음 drawBullet에 동일하게 반영 */
+    private boolean peekNextBullet() {
+        if (cachedNextBulletLive != null) return cachedNextBulletLive;
+
         int total = liveCount + blankCount;
         if (total <= 0) {
-            // 컨트롤러가 보통 reload하지만 혹시 몰라 안전장치
+            // 안전장치(정상흐름이면 컨트롤러가 reload함)
             reload();
             total = liveCount + blankCount;
         }
+
         int r = random.nextInt(total);
-        return r < liveCount;
+        cachedNextBulletLive = (r < liveCount);
+        return cachedNextBulletLive;
     }
 
-    /** 미리보기로 정해둔 탄을 실제로 소모 */
-    private void consumePlannedBullet() {
-        if (plannedBulletLive == null) return;
-
-        if (plannedBulletLive) {
-            if (liveCount > 0) liveCount--;
-        } else {
-            if (blankCount > 0) blankCount--;
-        }
-    }
-
-    /** 실제 발사: 남은 탄에서 랜덤 1발 뽑아 소모 */
+    /** 실제 발사: 캐시가 있으면 그걸 먼저 소모 */
     private boolean drawBullet() {
+        // 캐시 우선 소모(GPT/악마 plan이 봤던 "그 탄"을 그대로 쓴다)
+        if (cachedNextBulletLive != null) {
+            boolean b = cachedNextBulletLive;
+            cachedNextBulletLive = null;
+            if (b) liveCount--;
+            else blankCount--;
+            return b;
+        }
+
         int total = liveCount + blankCount;
         if (total <= 0) {
             reload();
@@ -218,7 +331,7 @@ public class EveningGameLogic {
         }
     }
 
-    // ---------- util ----------
+    // ---------------- 유틸 ----------------
     private int clamp(int v, int min, int max) {
         return Math.max(min, Math.min(max, v));
     }

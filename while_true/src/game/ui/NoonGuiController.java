@@ -1,26 +1,11 @@
 package game.ui;
 
 import game.stage.noon.NoonGameLogic;
-import game.ui.gameover.GameOverOverlay;
-import game.core.GameOverReason;
-import game.ui.event.SocialWarningOverlay; // ✅ 추가
 
-import javax.swing.JOptionPane;
-
-/**
- * NoonGuiController
- *
- * - 버튼 입력 → 로직 처리 → 화면 갱신 담당
- * - 어떤 예외가 나도 게임이 "멈춰 보이는" 상황을 방지하기 위해
- *   안전 래퍼(onUserChoiceSafe)로 전부 감쌈.
- */
 public class NoonGuiController {
 
     private final NoonWindow window;
     private final NoonGameLogic logic;
-
-    // 디버그용: 마지막으로 성공한 단계
-    private String lastStep = "(none)";
 
     public NoonGuiController() {
         window = new NoonWindow();
@@ -28,129 +13,58 @@ public class NoonGuiController {
 
         bindEvents();
 
-        // 시작 텍스트도 null 방어
-        String firstText = safeString(logic.start());
+        // 1) 게임 시작 시 첫 대사 출력
+        String firstText = logic.start();
         window.printDialogue(firstText);
 
-        window.setStatusText("현재 상태 → 체력 3 / 멘탈 4 / 지식 3 / 사교 0");
+        // 2) 시작 상태 표시
+        window.setStatusText("현재 상태 → 체력 5 / 멘탈 5 / 지식 5 / 사교 0");
 
-        // 시작 NPC = 1번
+        // 3) 시작 NPC = 1번
         window.setNpcImage(1);
 
         window.setVisible(true);
     }
 
     private void bindEvents() {
-        window.getBtn1().addActionListener(e -> onUserChoiceSafe(1));
-        window.getBtn2().addActionListener(e -> onUserChoiceSafe(2));
-        window.getBtn3().addActionListener(e -> onUserChoiceSafe(3));
+        window.getBtn1().addActionListener(e -> onUserChoice(1));
+        window.getBtn2().addActionListener(e -> onUserChoice(2));
+        window.getBtn3().addActionListener(e -> onUserChoice(3));
     }
 
-    /** ✅ 절대 안 죽게 감싸는 래퍼 */
-    private void onUserChoiceSafe(int choice) {
-        try {
-            onUserChoice(choice);
-        } catch (Throwable t) {
-            String msg = t.getClass().getName() + " : " + String.valueOf(t.getMessage());
-
-            System.err.println("\n==============================");
-            System.err.println("[NoonGuiController] ERROR!");
-            System.err.println("choice=" + choice);
-            System.err.println("lastStep=" + lastStep);
-            System.err.println("exception=" + msg);
-            System.err.println("==============================\n");
-            t.printStackTrace();
-
-            JOptionPane.showMessageDialog(
-                    window,
-                    "에러 발생!\n\n"
-                            + "choice = " + choice + "\n"
-                            + "lastStep = " + lastStep + "\n\n"
-                            + msg + "\n\n"
-                            + "(콘솔 로그도 확인해줘)",
-                    "Noon Error",
-                    JOptionPane.ERROR_MESSAGE
-            );
-
-            window.printDialogue("…뭔가 어긋났다.\n(콘솔/팝업을 확인해봐)");
-        }
-    }
-
-    /** 실제 처리 */
     private void onUserChoice(int choice) {
-        step("STEP 1) clicked: " + choice);
-
-        // 1) 로직 처리
-        step("STEP 2) call logic.handleChoice()");
+        // 로직 처리 → 전체 텍스트 반환 (변화 로그 + 다음 대사 포함)
         String fullText = logic.handleChoice(choice);
-        step("STEP 3) handleChoice returned (" + (fullText == null ? "null" : ("len=" + fullText.length())) + ")");
 
-        // null 방어
-        fullText = safeString(fullText);
-
-        // 2) 가운데 대사 전체 갱신
-        step("STEP 4) window.printDialogue()");
+        // 1) 가운데 대사 전체 갱신
         window.printDialogue(fullText);
 
-        // 3) 변화 로그 표시
-        step("STEP 5) updateStatusAreaSafe()");
-        updateStatusAreaSafe(fullText);
+        // 2) 변화 로그 + 현재 상태 부분만 왼쪽에 표시
+        updateStatusArea(fullText);
 
-        // ✅ 3.5) 사교 경고 이벤트 (GameOver 아님, -5 이하 최초 1회)
-        step("STEP 5.5) check social warning");
-        if (logic.shouldShowSocialWarning()) {
-            step("STEP 5.6) show SocialWarningOverlay()");
-            new SocialWarningOverlay(window).setVisible(true);
-        }
-
-        // 4) Game Over 판정 ✅(원인 전달 버전)
-        step("STEP 6) logic.isGameOver()");
-        if (logic.isGameOver()) {
-            step("STEP 7) show GameOverOverlay()");
-            GameOverReason reason = logic.getGameOverReason();
-            new GameOverOverlay(window, reason).setVisible(true);
-            return;
-        }
-
-        // 5) NPC 이미지 변경 (파싱 실패해도 게임은 진행)
-        step("STEP 8) extract npcIndex");
-        int npcIndex = extractCurrentNpcIndexSafe(fullText);
-        step("STEP 9) npcIndex = " + npcIndex);
+        // 3) fullText 안에서 "---------- [대화 N회차] ----------" → N 추출 → NPC 이미지 변경
+        int npcIndex = extractCurrentNpcIndex(fullText);
 
         if (npcIndex >= 1 && npcIndex <= 12) {
-            step("STEP 10) window.setNpcImage(" + npcIndex + ")");
             window.setNpcImage(npcIndex);
-        } else {
-            System.err.println("[NoonGuiController] npcIndex 파싱 실패/범위 밖: " + npcIndex);
         }
-
-        step("STEP 11) done");
-    }
-
-    private void step(String s) {
-        lastStep = s;
-        System.out.println(s);
-    }
-
-    private String safeString(String s) {
-        return (s == null) ? "" : s;
     }
 
     /**
      * fullText 안에서 마지막 "---------- [대화 N회차] ----------" 의 N을 찾아 리턴
      */
-    private int extractCurrentNpcIndexSafe(String text) {
+    private int extractCurrentNpcIndex(String text) {
+        String marker = "---------- [대화 ";
+        int idx = text.lastIndexOf(marker);
+
+        if (idx < 0) return -1;
+
+        int start = idx + marker.length();
+        int end = text.indexOf("회차", start);
+
+        if (end < 0) return -1;
+
         try {
-            if (text == null || text.isEmpty()) return -1;
-
-            String marker = "---------- [대화 ";
-            int idx = text.lastIndexOf(marker);
-            if (idx < 0) return -1;
-
-            int start = idx + marker.length();
-            int end = text.indexOf("회차", start);
-            if (end < 0) return -1;
-
             String numStr = text.substring(start, end).trim();
             return Integer.parseInt(numStr);
         } catch (Exception e) {
@@ -159,32 +73,21 @@ public class NoonGuiController {
     }
 
     /**
-     * 변화 로그 부분만 왼쪽 statusArea에 표시
+     * 변화 로그 부분만 따로 왼쪽 statusArea에 표시
      */
-    private void updateStatusAreaSafe(String fullText) {
-        try {
-            if (fullText == null || fullText.isEmpty()) {
-                window.setStatusText("…");
-                return;
+    private void updateStatusArea(String fullText) {
+        String statusPart = "";
+
+        int idx = fullText.indexOf("[변화 로그]");
+
+        if (idx >= 0) {
+            statusPart = fullText.substring(idx);
+            int nextIdx = statusPart.indexOf("---------- [대화");
+            if (nextIdx > 0) {
+                statusPart = statusPart.substring(0, nextIdx);
             }
-
-            String statusPart = "";
-
-            int idx = fullText.indexOf("[변화 로그]");
-            if (idx >= 0) {
-                statusPart = fullText.substring(idx);
-
-                int nextIdx = statusPart.indexOf("---------- [대화");
-                if (nextIdx > 0) {
-                    statusPart = statusPart.substring(0, nextIdx);
-                }
-            } else {
-                statusPart = "…";
-            }
-
-            window.setStatusText(statusPart);
-        } catch (Exception e) {
-            window.setStatusText("…");
         }
+
+        window.setStatusText(statusPart);
     }
 }
