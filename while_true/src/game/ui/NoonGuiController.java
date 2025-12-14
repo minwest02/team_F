@@ -2,6 +2,8 @@ package game.ui;
 
 import game.stage.noon.NoonGameLogic;
 import game.ui.gameover.GameOverOverlay;
+import game.core.GameOverReason;
+import game.ui.event.SocialWarningOverlay; // ✅ 추가
 
 import javax.swing.JOptionPane;
 
@@ -11,10 +13,6 @@ import javax.swing.JOptionPane;
  * - 버튼 입력 → 로직 처리 → 화면 갱신 담당
  * - 어떤 예외가 나도 게임이 "멈춰 보이는" 상황을 방지하기 위해
  *   안전 래퍼(onUserChoiceSafe)로 전부 감쌈.
- *
- * - 오류가 나면:
- *   1) 콘솔에 STEP 로그 + 스택트레이스 출력
- *   2) 팝업으로 예외 타입/메시지/마지막 단계 표시
  */
 public class NoonGuiController {
 
@@ -34,7 +32,7 @@ public class NoonGuiController {
         String firstText = safeString(logic.start());
         window.printDialogue(firstText);
 
-        window.setStatusText("현재 상태 → 체력 5 / 멘탈 5 / 지식 5 / 사교 0");
+        window.setStatusText("현재 상태 → 체력 3 / 멘탈 4 / 지식 3 / 사교 0");
 
         // 시작 NPC = 1번
         window.setNpcImage(1);
@@ -48,11 +46,7 @@ public class NoonGuiController {
         window.getBtn3().addActionListener(e -> onUserChoiceSafe(3));
     }
 
-    /**
-     * ✅ 절대 안 죽게 감싸는 래퍼
-     * - 여기서 잡히면 "컨트롤러/로직" 어디든 문제인 건 확실함
-     * - 팝업으로 예외 타입/메시지/마지막 단계까지 보여줌
-     */
+    /** ✅ 절대 안 죽게 감싸는 래퍼 */
     private void onUserChoiceSafe(int choice) {
         try {
             onUserChoice(choice);
@@ -78,14 +72,11 @@ public class NoonGuiController {
                     JOptionPane.ERROR_MESSAGE
             );
 
-            // 불친절 감성 유지: 멈추지 않고 최소 메시지만
             window.printDialogue("…뭔가 어긋났다.\n(콘솔/팝업을 확인해봐)");
         }
     }
 
-    /**
-     * 실제 처리 (여기서 터지면 Safe가 잡아줌)
-     */
+    /** 실제 처리 */
     private void onUserChoice(int choice) {
         step("STEP 1) clicked: " + choice);
 
@@ -105,11 +96,19 @@ public class NoonGuiController {
         step("STEP 5) updateStatusAreaSafe()");
         updateStatusAreaSafe(fullText);
 
-        // 4) Game Over 판정
+        // ✅ 3.5) 사교 경고 이벤트 (GameOver 아님, -5 이하 최초 1회)
+        step("STEP 5.5) check social warning");
+        if (logic.shouldShowSocialWarning()) {
+            step("STEP 5.6) show SocialWarningOverlay()");
+            new SocialWarningOverlay(window).setVisible(true);
+        }
+
+        // 4) Game Over 판정 ✅(원인 전달 버전)
         step("STEP 6) logic.isGameOver()");
         if (logic.isGameOver()) {
             step("STEP 7) show GameOverOverlay()");
-            new GameOverOverlay(window).setVisible(true);
+            GameOverReason reason = logic.getGameOverReason();
+            new GameOverOverlay(window, reason).setVisible(true);
             return;
         }
 
@@ -122,7 +121,6 @@ public class NoonGuiController {
             step("STEP 10) window.setNpcImage(" + npcIndex + ")");
             window.setNpcImage(npcIndex);
         } else {
-            // 파싱 실패해도 죽지 않게
             System.err.println("[NoonGuiController] npcIndex 파싱 실패/범위 밖: " + npcIndex);
         }
 
@@ -140,7 +138,6 @@ public class NoonGuiController {
 
     /**
      * fullText 안에서 마지막 "---------- [대화 N회차] ----------" 의 N을 찾아 리턴
-     * - 포맷이 살짝 달라도 죽지 않게 안전 파싱
      */
     private int extractCurrentNpcIndexSafe(String text) {
         try {
@@ -163,7 +160,6 @@ public class NoonGuiController {
 
     /**
      * 변화 로그 부분만 왼쪽 statusArea에 표시
-     * - "[변화 로그]"가 없으면 기본 문구만 표시
      */
     private void updateStatusAreaSafe(String fullText) {
         try {

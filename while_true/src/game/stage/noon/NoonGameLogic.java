@@ -1,6 +1,7 @@
 package game.stage.noon;
 
 import java.util.Random;
+import game.core.GameOverReason;
 
 /**
  * NoonGameLogic
@@ -9,10 +10,13 @@ import java.util.Random;
  */
 public class NoonGameLogic {
 
+    // ===== 디버그 로그 ON/OFF =====
+    private static final boolean DEBUG = false;
+
     // ===== 상태값(플레이어 스탯) =====
-    private int hp = 5;          // 체력
-    private int mental = 5;      // 멘탈
-    private int knowledge = 5;   // 지식
+    private int hp = 3;          // 체력
+    private int mental = 4;      // 멘탈
+    private int knowledge = 3;   // 지식
     private int social = 0;      // 사교
 
     private int interactionCount = 0;
@@ -21,11 +25,34 @@ public class NoonGameLogic {
     private final Random random = new Random();
     private boolean gameOver = false;
 
+    // ===== GameOver 원인 =====
+    private GameOverReason gameOverReason = GameOverReason.NONE;
+
+    // ===== 사교 경고(1회성 이벤트) =====
+    private boolean socialWarningShown = false;
+
     /* ===================== 외부 조회용 ===================== */
 
-    /** 컨트롤러에서 GameOver 여부 확인용 */
+    /** GameOver 여부 */
     public boolean isGameOver() {
         return gameOver;
+    }
+
+    /** GameOver 원인 */
+    public GameOverReason getGameOverReason() {
+        return gameOverReason;
+    }
+
+    /**
+     * 사교 스탯 경고 이벤트 발생 여부
+     * - social <= -5 최초 1회만 true
+     */
+    public boolean shouldShowSocialWarning() {
+        if (!socialWarningShown && social <= -5) {
+            socialWarningShown = true;
+            return true;
+        }
+        return false;
     }
 
     /* ===================== 시작 ===================== */
@@ -35,9 +62,12 @@ public class NoonGameLogic {
         interactionCount = 0;
         gameOver = false;
 
-        hp = 5;
-        mental = 5;
-        knowledge = 5;
+        gameOverReason = GameOverReason.NONE;
+        socialWarningShown = false;
+
+        hp = 3;
+        mental = 4;
+        knowledge = 3;
         social = 0;
 
         return "=== 점심 스테이지: 캠퍼스 미연시 시작 ===\n"
@@ -65,27 +95,27 @@ public class NoonGameLogic {
         StringBuilder sb = new StringBuilder();
         sb.append("---------- [대화 ").append(npcIndex).append("회차 결과] ----------\n");
 
-        // 1️⃣ 선택에 따른 상태 변화
+        // 1) 선택에 따른 상태 변화
         applyNpcEffect(npcIndex, choice, sb);
 
-        // 2️⃣ 상태값 범위 제한
+        // 2) 상태값 범위 제한
         clampStats();
 
-        // 3️⃣ 상태 출력
+        // 3) 상태 출력
         sb.append("\n현재 상태 → 체력: ").append(hp)
           .append(" / 멘탈: ").append(mental)
           .append(" / 지식: ").append(knowledge)
           .append(" / 사교: ").append(social)
           .append("\n");
 
-        // 4️⃣ Game Over 판정
+        // 4) Game Over 판정
         if (checkGameOver(sb)) {
             return sb.toString();
         }
 
         interactionCount++;
 
-        // 5️⃣ 다음 NPC 대사
+        // 5) 다음 NPC 대사
         if (interactionCount < MAX_INTERACTIONS) {
             int nextNpc = interactionCount + 1;
 
@@ -110,10 +140,13 @@ public class NoonGameLogic {
             gameOver = true;
 
             if (hp <= 0) {
+                gameOverReason = GameOverReason.HP_ZERO;
                 sb.append("\nGame Over - 체력 0 (기절 엔딩)\n");
             } else if (mental <= 0) {
+                gameOverReason = GameOverReason.MENTAL_ZERO;
                 sb.append("\nGame Over - 멘탈 0 (침잠 엔딩)\n");
             } else {
+                gameOverReason = GameOverReason.KNOWLEDGE_ZERO;
                 sb.append("\nGame Over - 지식 0 (학사경고 엔딩)\n");
             }
             return true;
@@ -184,7 +217,6 @@ public class NoonGameLogic {
 
     /* ===================== 루프 힌트 ===================== */
 
-    /** 회차가 쌓일수록 힌트 확률 증가 */
     private void maybeAppendHint(StringBuilder sb, String hint) {
         double base = 0.2;
         double bonus = interactionCount * 0.05;
@@ -198,68 +230,110 @@ public class NoonGameLogic {
     private void applyNpcEffect(int npc, int choice, StringBuilder sb) {
         int dhp = 0, dMental = 0, dKnow = 0, dSocial = 0;
 
+        if (DEBUG) {
+            System.out.println("[DEBUG BEFORE] npc=" + npc + " choice=" + choice
+                    + " → hp=" + hp + ", mental=" + mental + ", know=" + knowledge + ", social=" + social);
+            System.out.println("[DEBUG] ENTER case " + npc);
+        }
+
         switch (npc) {
+
+            // 1) 교수님: 공부/평가 압박 → 지식↑ or 멘탈↓
             case 1 -> {
                 if (choice == 1)       { dKnow += 2; dMental -= 1; }
-                else if (choice == 2) { dMental -= 1; dSocial -= 1; }
-                else                  { dKnow -= 1; dMental -= 2; dSocial -= 2; }
+                else if (choice == 2)  { dMental -= 1; }
+                else                   { dKnow -= 2; dMental -= 1; }
             }
+
+            // 2) 버스기사: 소소한 인간관계/배려 → 사교 중심
             case 2 -> {
-                if (choice == 1)       { dSocial += 1; }
-                else if (choice == 3) { dSocial -= 1; dMental -= 1; }
+                if (choice == 1)       { dSocial += 2; }
+                else if (choice == 2)  { /* 변화 없음 */ }
+                else                   { dSocial -= 1; }
             }
+
+            // 3) 친구: 공감/대화 → 멘탈 회복 or 사교 손상
             case 3 -> {
-                if (choice == 1)       { dSocial += 1; dMental -= 1; }
-                else if (choice == 2) { dMental += 1; dSocial -= 1; }
-                else                  { dMental -= 1; dSocial -= 2; }
+                if (choice == 1)       { dSocial += 1; dMental += 1; }
+                else if (choice == 2)  { dMental += 1; }
+                else                   { dSocial -= 2; }
             }
+
+            // 4) 선배: 길안내/조언 → 지식↑ 또는 멘탈 소모
             case 4 -> {
-                if (choice == 1)       { dKnow += 1; dMental -= 1; }
-                else if (choice == 2) { dMental += 1; dSocial -= 1; }
-                else                  { dMental -= 2; dSocial -= 2; }
+                if (choice == 1)       { dKnow += 1; dSocial += 1; }
+                else if (choice == 2)  { /* 변화 없음 */ }
+                else                   { dSocial -= 2; }
             }
+
+            // 5) 후배: 도움 요청 → 사교↑ 대신 멘탈/시간 소모
             case 5 -> {
-                if (choice == 1)       { dSocial += 1; dMental -= 1; }
-                else if (choice == 3) { dSocial -= 2; dMental -= 1; }
+                if (choice == 1)       { dSocial += 2; dMental -= 1; }
+                else if (choice == 2)  { /* 변화 없음 */ }
+                else                   { dSocial -= 2; }
             }
+
+            // 6) 동아리 사람: 연습/모임 → 체력 소모 + 사교 영향
             case 6 -> {
-                if (choice == 1)       { dSocial += 1; dhp -= 1; }
-                else                   { dMental += 1; dSocial -= 1; }
+                if (choice == 1)       { dSocial += 2; dhp -= 1; }
+                else if (choice == 2)  { dMental += 1; dSocial -= 1; }
+                else                   { dSocial -= 2; }
             }
+
+            // 7) 헬창: 운동 권유 → 체력↑ 또는 멘탈/사교 소모
             case 7 -> {
-                if (choice == 1)       { dhp += 1; }
-                else if (choice == 2) { dSocial -= 1; }
-                else                  { dMental += 1; dSocial -= 1; }
+                if (choice == 1)       { dhp += 2; dMental += 1; }
+                else if (choice == 2)  { /* 변화 없음 */ }
+                else                   { dSocial -= 1; dMental -= 1; }
             }
+
+            // 8) 식당 주인: 밥/휴식 → 체력 핵심 회복, 무시는 컨디션 하락
             case 8 -> {
-                if (choice == 1)       { dhp += 2; dSocial += 1; }
-                else if (choice == 3) { dhp -= 1; dSocial -= 1; dMental -= 1; }
+                if (choice == 1)       { dhp += 2; dMental += 1; }
+                else if (choice == 2)  { dhp += 1; }
+                else                   { dhp -= 2; dMental -= 1; }
             }
+
+            // 9) 대학원생: 고급 조언 → 지식↑ 대신 멘탈 소모
             case 9 -> {
-                if (choice == 1)       { dKnow += 2; dMental -= 2; }
-                else if (choice == 2) { dMental += 1; }
-                else                  { dKnow -= 1; dMental -= 1; dSocial -= 2; }
+                if (choice == 1)       { dKnow += 2; dMental -= 1; }
+                else if (choice == 2)  { dMental += 1; }
+                else                   { dKnow -= 1; }
             }
+
+            // 10) 스님: 통찰/위로 → 멘탈 회복 중심, 약간의 지식(깨달음)
             case 10 -> {
-                if (choice == 1)       { dMental += 2; dKnow += 1; }
-                else                  { dMental += 1; }
+                if (choice == 1)       { dMental += 3; dKnow += 1; }
+                else if (choice == 2)  { dMental += 1; }
+                else                   { /* 변화 없음 */ }
             }
+
+            // 11) 과대표: 공지/협조 → 지식(정보) + 사교, 무시는 관계 악화
             case 11 -> {
-                if (choice == 1)       { dKnow += 1; dSocial += 1; dMental -= 1; }
-                else if (choice == 2) { dMental += 1; dSocial -= 1; }
-                else                  { dMental += 1; dSocial -= 2; }
+                if (choice == 1)       { dKnow += 1; dSocial += 2; }
+                else if (choice == 2)  { dSocial -= 1; }
+                else                   { dSocial -= 3; dMental -= 1; }
             }
+
+            // 12) 조교: 형식/피드백 → 지식↑ 대신 멘탈 소모, 무시는 지식 손해
             case 12 -> {
-                if (choice == 1)       { dKnow += 1; dMental -= 1; }
-                else if (choice == 2) { dSocial -= 1; }
-                else                  { dKnow -= 1; dMental -= 1; dSocial -= 2; }
+                if (choice == 1)       { dKnow += 2; dMental -= 1; }
+                else if (choice == 2)  { /* 변화 없음 */ }
+                else                   { dKnow -= 2; dMental -= 1; }
             }
         }
 
+        // 실제 반영
         hp += dhp;
         mental += dMental;
         knowledge += dKnow;
         social += dSocial;
+
+        if (DEBUG) {
+            System.out.println("[DEBUG AFTER] npc=" + npc + " choice=" + choice
+                    + " dhp=" + dhp + " dMental=" + dMental + " dKnow=" + dKnow + " dSocial=" + dSocial
+                    + " → hp=" + hp + ", mental=" + mental + ", know=" + knowledge + ", social=" + social);
+        }
 
         sb.append("[변화 로그] 체력 ").append(sign(dhp))
           .append(" / 멘탈 ").append(sign(dMental))
