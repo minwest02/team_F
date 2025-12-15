@@ -34,7 +34,6 @@ public class NoonWindow extends JFrame {
         setLocationRelativeTo(null);
 
         // ===== 배경 이미지 로딩 =====
-        // 파일명/경로는 네가 넣어둔 이름에 맞게 수정
         backgroundImage = new ImageIcon("assets/images/noon/00_캠퍼스 배경.png").getImage();
 
         // 전체 레이아웃
@@ -46,7 +45,6 @@ public class NoonWindow extends JFrame {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 if (backgroundImage != null) {
-                    // 패널 크기에 맞게 배경을 채워 그림
                     g.drawImage(backgroundImage, 0, 0,
                             getWidth(), getHeight(), this);
                 }
@@ -57,24 +55,19 @@ public class NoonWindow extends JFrame {
 
         // ===== 캐릭터를 조금 아래로 내리기 위한 래퍼 패널 =====
         JPanel characterPanel = new JPanel();
-        characterPanel.setOpaque(false); // 배경이 비치도록
+        characterPanel.setOpaque(false);
         characterPanel.setLayout(new BoxLayout(characterPanel, BoxLayout.Y_AXIS));
 
-        // 위쪽에 여백(내리고 싶은 정도만큼 조절 가능)
-        int offsetY = 230; // ← 숫자 키우면 더 아래로 내려감
+        int offsetY = 230; // 숫자 키우면 더 아래로 내려감
         characterPanel.add(Box.createVerticalStrut(offsetY));
 
-        // 가운데 NPC 이미지를 위한 라벨
         playerLabel = new JLabel("", SwingConstants.CENTER);
         playerLabel.setVerticalAlignment(SwingConstants.TOP);
         playerLabel.setPreferredSize(new Dimension(400, 500));
-        playerLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // 가운데 정렬
+        playerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         characterPanel.add(playerLabel);
-
-        // centerPanel의 가운데에 이 래퍼 패널을 올림
         centerPanel.add(characterPanel, BorderLayout.CENTER);
-
 
         // ===== 하단 전체 루트 패널 =====
         JPanel bottomRoot = new JPanel(new BorderLayout());
@@ -86,7 +79,6 @@ public class NoonWindow extends JFrame {
         JPanel infoPanel = new JPanel(new BorderLayout());
         bottomRoot.add(infoPanel, BorderLayout.CENTER);
 
-        // 왼쪽: 상태 로그
         statusArea = new JTextArea();
         statusArea.setEditable(false);
         statusArea.setLineWrap(true);
@@ -98,7 +90,6 @@ public class NoonWindow extends JFrame {
         statusScroll.setPreferredSize(new Dimension(250, 200));
         infoPanel.add(statusScroll, BorderLayout.WEST);
 
-        // 가운데: NPC 대사
         dialogueArea = new JTextArea();
         dialogueArea.setEditable(false);
         dialogueArea.setLineWrap(true);
@@ -128,8 +119,8 @@ public class NoonWindow extends JFrame {
         bottomRoot.add(buttonPanel, BorderLayout.SOUTH);
 
         // ===== NPC 이미지 로딩 + 시작 시 1번 NPC 표시 =====
-        loadNpcIcons();   // 라벨 크기에 맞춰 리사이즈
-        setNpcImage(1);   // 시작할 때 1번 NPC 이미지 보여주기
+        loadNpcIcons();
+        setNpcImage(1);
     }
 
     // ===== 외부에서 쓰는 메서드들 =====
@@ -138,10 +129,17 @@ public class NoonWindow extends JFrame {
     public JButton getBtn2() { return btnChoice2; }
     public JButton getBtn3() { return btnChoice3; }
 
+    // ✅ 추가: 컨트롤러에서 버튼 잠금/해제할 수 있게 함
+    public void setButtonsEnabled(boolean enabled) {
+        btnChoice1.setEnabled(enabled);
+        btnChoice2.setEnabled(enabled);
+        btnChoice3.setEnabled(enabled);
+    }
+
     /** 가운데 대사 영역 텍스트 설정 + 항상 맨 위부터 보이게 */
     public void printDialogue(String text) {
         dialogueArea.setText(text);
-        dialogueArea.setCaretPosition(0); // 항상 대사 첫 줄이 보이도록
+        dialogueArea.setCaretPosition(0);
     }
 
     /** 왼쪽 상태 로그 영역 텍스트 설정 */
@@ -156,32 +154,24 @@ public class NoonWindow extends JFrame {
         playerLabel.setText(text);
     }
 
-    /**
-     * NPC 이미지 파일들을 미리 로딩하는 메서드
-     * - playerLabel의 preferredSize(400x500)를 기준으로
-     *   비율을 유지하면서 안에 딱 맞게 리사이즈함
-     * - 파일명은 01_~, 02_~ 형식으로 맞춰둔 상태 기준
-     */
     private void loadNpcIcons() {
         String basePath = "assets/images/noon/";
 
-        // NPC 번호 = 배열 인덱스 + 1
         String[] files = {
-                "01_교수님.png",      // 1
-                "02_버스기사.png",    // 2
-                "03_학교친구.png",    // 3
-                "04_선배.png",        // 4
-                "05_후배.png",        // 5
-                "06_동아리사람.png",  // 6
-                "07_헬창.png",        // 7
-                "08_식당주인.png",    // 8
-                "09_대학원생.png",    // 9
-                "10_스님.png",        // 10
-                "11_과대표.png",      // 11
-                "14_조교.png"         // 12
+                "01_교수님.png",
+                "02_버스기사.png",
+                "03_학교친구.png",
+                "04_선배.png",
+                "05_후배.png",
+                "06_동아리사람.png",
+                "07_헬창.png",
+                "08_식당주인.png",
+                "09_대학원생.png",
+                "10_스님.png",
+                "11_과대표.png",
+                "14_조교.png"
         };
 
-        // 라벨의 목표 크기(= preferredSize)를 기준으로 스케일링
         Dimension d = playerLabel.getPreferredSize();
         int targetW = d.width;
         int targetH = d.height;
@@ -193,7 +183,6 @@ public class NoonWindow extends JFrame {
             int imgW = rawIcon.getIconWidth();
             int imgH = rawIcon.getIconHeight();
 
-            // 가로/세로 비율 유지하면서 라벨 크기 안에 딱 들어가도록 스케일 계산
             double scale = Math.min(
                     (double) targetW / imgW,
                     (double) targetH / imgH
@@ -207,7 +196,6 @@ public class NoonWindow extends JFrame {
         }
     }
 
-    /** NPC 번호(1~12)에 따라 가운데 playerLabel에 이미지 표시 */
     public void setNpcImage(int npcIndex) {
         if (npcIndex < 1 || npcIndex > npcIcons.length) {
             return;
