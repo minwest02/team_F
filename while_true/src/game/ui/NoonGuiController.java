@@ -2,12 +2,26 @@ package game.ui;
 
 import game.stage.noon.NoonGameLogic;
 
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+
 public class NoonGuiController {
 
     private final NoonWindow window;
     private final NoonGameLogic logic;
 
+    // ✅ 점심 클리어 시 실행할 콜백(저녁 스테이지 시작용)
+    private final Runnable onClear;
+
+    // 기존 코드 호환용 (기존 호출 new NoonGuiController(); 그대로 동작)
     public NoonGuiController() {
+        this(null);
+    }
+
+    // ✅ 다음 스테이지 체인 연결용 생성자
+    public NoonGuiController(Runnable onClear) {
+        this.onClear = (onClear != null) ? onClear : () -> {};
+
         window = new NoonWindow();
         logic  = new NoonGameLogic();
 
@@ -44,10 +58,20 @@ public class NoonGuiController {
 
         // 3) fullText 안에서 "---------- [대화 N회차] ----------" → N 추출 → NPC 이미지 변경
         int npcIndex = extractCurrentNpcIndex(fullText);
-
         if (npcIndex >= 1 && npcIndex <= 12) {
             window.setNpcImage(npcIndex);
         }
+
+        // ✅ 4) 점심 클리어 시 → 저녁 스테이지로 전환
+        if (logic.isCleared()) {
+            JOptionPane.showMessageDialog(window, "점심 스테이지 클리어! 저녁 스테이지로 이동함.");
+            window.dispose(); // 점심 창 닫기
+            SwingUtilities.invokeLater(onClear); // 다음 스테이지 실행
+            return;
+        }
+
+        // (선택) 게임오버 시 여기서 버튼 비활성화 같은 처리도 가능함
+        // if (logic.isGameOver()) { window.setButtonsEnabled(false); }
     }
 
     /**

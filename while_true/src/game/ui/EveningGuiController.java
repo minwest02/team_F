@@ -3,17 +3,29 @@ package game.ui;
 import game.stage.evening.EveningGameLogic;
 
 import javax.swing.*;
+import javax.swing.SwingUtilities;
 
 public class EveningGuiController {
 
     private final EveningGameLogic logic;
     private final EveningWindow window;
 
+    // ✅ 저녁 스테이지 클리어(승리) 시 실행할 콜백(밤으로 이동)
+    private final Runnable onClear;
+
     // 턴당 아이템 최대 2개
     private int itemsUsedThisTurn = 0;
     private static final int MAX_ITEMS_PER_TURN = 2;
 
+    // 기존 호출 호환용
     public EveningGuiController() {
+        this(null);
+    }
+
+    // ✅ 체인 연결용 생성자
+    public EveningGuiController(Runnable onClear) {
+        this.onClear = (onClear != null) ? onClear : () -> {};
+
         this.logic = new EveningGameLogic();
         this.window = new EveningWindow(this, logic);
 
@@ -208,9 +220,23 @@ public class EveningGuiController {
 
     private void showResult() {
         String msg;
-        if (logic.getPlayerHp() <= 0 && logic.getDemonHp() <= 0) msg = "무승부... 둘 다 쓰러졌다.";
-        else if (logic.getPlayerHp() <= 0) msg = "패배... 과제 악마에게 지고 말았다.";
-        else msg = "승리! 오늘의 과제를 처치했다!";
+        boolean cleared = false;
+
+        if (logic.getPlayerHp() <= 0 && logic.getDemonHp() <= 0) {
+            msg = "무승부... 둘 다 쓰러졌다.";
+        } else if (logic.getPlayerHp() <= 0) {
+            msg = "패배... 과제 악마에게 지고 말았다.";
+        } else {
+            msg = "승리! 오늘의 과제를 처치했다!";
+            cleared = true;
+        }
+
         JOptionPane.showMessageDialog(window, msg);
+
+        // ✅ 승리(클리어) 시 → 밤 스테이지로 이동
+        if (cleared) {
+            window.dispose();
+            SwingUtilities.invokeLater(onClear);
+        }
     }
 }

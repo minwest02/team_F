@@ -1,6 +1,8 @@
 package game.ui.title;
 
 import game.ui.NoonGuiController;
+import game.ui.EveningGuiController;     // ✅ 추가: 저녁 컨트롤러(프로젝트에 맞게 이름 확인)
+import game.stage.night.NightWindow;     // ✅ 추가: 밤 스테이지 윈도우(프로젝트에 맞게 이름 확인)
 import game.ui.intro.IntroSequenceRunner;
 
 import javax.swing.*;
@@ -10,7 +12,7 @@ import javax.swing.*;
  * - 타이틀 화면의 버튼 이벤트 담당
  *
  * [한줄 요약]
- * - START → Intro 1~5 재생 → 점심(Noon)으로 이동함.
+ * - START → Intro 1~5 재생 → 점심(Noon) → 저녁(Evening) → 밤(Night) 순서로 진행함.
  */
 public class TitleController {
 
@@ -37,7 +39,17 @@ public class TitleController {
 
         // ✅ Intro 1~5 연속 실행 후 → Noon 시작
         IntroSequenceRunner.start(() -> SwingUtilities.invokeLater(() -> {
-            new NoonGuiController();
+
+            // Noon(점심) 클리어 → Evening(저녁) 시작
+            new NoonGuiController(() -> {
+
+                // Evening(저녁) 클리어 → Night(밤) 시작
+                new EveningGuiController(() -> {
+                    new NightWindow(); // 밤 스테이지 진입
+                });
+
+            });
+
             window.dispose(); // 타이틀 정리
         }));
     }

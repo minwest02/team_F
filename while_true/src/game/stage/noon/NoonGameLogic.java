@@ -269,4 +269,29 @@ public class NoonGameLogic {
         if (v < 0) return String.valueOf(v);
         return "0";
     }
+
+    /* ===============================
+       ✅ [추가] 스테이지 전환용 상태 조회 메서드
+       - GUI 컨트롤러가 "클리어/게임오버" 판단할 때 사용함
+       =============================== */
+
+    /** 현재 게임오버 상태인지 */
+    public boolean isGameOver() {
+        return gameOver;
+    }
+
+    /** 점심 스테이지를 정상적으로 끝까지 완료(클리어)했는지 */
+    public boolean isCleared() {
+        return !gameOver && interactionCount >= MAX_INTERACTIONS;
+    }
+
+    /** (선택) 진행도 확인이 필요하면 GUI에서 써도 됨 */
+    public int getInteractionCount() {
+        return interactionCount;
+    }
+
+    /** (선택) 총 대화 횟수(클리어 조건) */
+    public int getMaxInteractions() {
+        return MAX_INTERACTIONS;
+    }
 }
