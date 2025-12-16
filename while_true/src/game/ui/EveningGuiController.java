@@ -138,7 +138,7 @@ public class EveningGuiController {
         }
     }
 
-    // ---------------- 악마 턴(고민2초 -> 겨누기2초 -> 발사) ----------------
+    // ---------------- 악마 턴(고민2초 -> 겨누기2초 -> 발사(격발 1초 연출)) ----------------
     private void startDemonTurnSequence() {
         if (logic.isGameOver()) {
             showResult();
@@ -168,26 +168,31 @@ public class EveningGuiController {
             window.refreshAll();
 
             after(2000, () -> {
-                // 3) 발사
-                StringBuilder log = new StringBuilder();
-                EveningGameLogic.TurnResult result = logic.executePlannedDemonTurn(log);
+                // ✅ (1) 발사 직전에 격발 연출 시작 (1초)
+                // 과제악마가 쏘는 컷으로 1초간 바뀜
+                window.playDemonShotAnimation();
 
-                window.appendLog("[과제 악마] " + log);
-                window.refreshAll();
+                // ✅ (2) 1초 뒤에 실제 데미지/로그 반영
+                after(1000, () -> {
+                    StringBuilder log = new StringBuilder();
+                    EveningGameLogic.TurnResult result = logic.executePlannedDemonTurn(log);
 
-                if (logic.isGameOver()) {
-                    showResult();
-                    window.setButtonsEnabled(false);
-                    return;
-                }
+                    window.appendLog("[과제 악마] " + log);
+                    window.refreshAll();
 
-                if (result == EveningGameLogic.TurnResult.TURN_CONTINUE) {
-                    // 악마 턴 유지 -> 다시 악마 턴
-                    maybeReloadThen(this::startDemonTurnSequence);
-                } else {
-                    // 플레이어 턴 시작
-                    maybeReloadThen(this::startPlayerTurn);
-                }
+                    if (logic.isGameOver()) {
+                        showResult();
+                        window.setButtonsEnabled(false);
+                        return;
+                    }
+
+                    // ✅ (3) 턴 유지면 다시 악마 턴 (공포탄 + 자기에게)
+                    if (result == EveningGameLogic.TurnResult.TURN_CONTINUE) {
+                        maybeReloadThen(this::startDemonTurnSequence);
+                    } else {
+                        maybeReloadThen(this::startPlayerTurn);
+                    }
+                });
             });
         });
     }
