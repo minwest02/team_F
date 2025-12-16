@@ -1,19 +1,15 @@
 package game.ui.title;
 
 import game.ui.NoonGuiController;
-import game.ui.EveningGuiController;     // ✅ 추가: 저녁 컨트롤러(프로젝트에 맞게 이름 확인)
-import game.stage.night.NightWindow;     // ✅ 추가: 밤 스테이지 윈도우(프로젝트에 맞게 이름 확인)
+import game.ui.EveningGuiController;
+import game.stage.night.NightWindow;
 import game.ui.intro.IntroSequenceRunner;
+
+// ✅ 아침은 GuiController가 아니라 Window로 시작함
+import game.stage.morning.MorningWindow;
 
 import javax.swing.*;
 
-/**
- * TitleController
- * - 타이틀 화면의 버튼 이벤트 담당
- *
- * [한줄 요약]
- * - START → Intro 1~5 재생 → 점심(Noon) → 저녁(Evening) → 밤(Night) 순서로 진행함.
- */
 public class TitleController {
 
     private final TitleWindow window;
@@ -34,23 +30,27 @@ public class TitleController {
     }
 
     private void onStart() {
-        // 타이틀은 일단 숨김(닫지 말고)
         window.setVisible(false);
 
-        // ✅ Intro 1~5 연속 실행 후 → Noon 시작
+        // ✅ Intro 1~5 → Morning(아침) → Noon(점심) → Evening(저녁) → Night(밤)
         IntroSequenceRunner.start(() -> SwingUtilities.invokeLater(() -> {
 
-            // Noon(점심) 클리어 → Evening(저녁) 시작
-            new NoonGuiController(() -> {
+            // ✅ Morning(아침) 클리어 → Noon 시작
+            new MorningWindow(() -> {
 
-                // Evening(저녁) 클리어 → Night(밤) 시작
-                new EveningGuiController(() -> {
-                    new NightWindow(); // 밤 스테이지 진입
+                // ✅ Noon(점심) 클리어 → Evening 시작
+                new NoonGuiController(() -> {
+
+                    // ✅ Evening(저녁) 클리어 → Night 시작
+                    new EveningGuiController(() -> {
+                        new NightWindow();
+                    });
+
                 });
 
             });
 
-            window.dispose(); // 타이틀 정리
+            window.dispose();
         }));
     }
 
